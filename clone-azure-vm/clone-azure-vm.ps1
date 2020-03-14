@@ -3,8 +3,8 @@
 #  Script       : Clone Existing Azure VM
 #  Description  : Clone an existing Azure VM
 #  Author       : Irfan Hassan
-#  Date         : 13/03/2020
-#  Version      : 1.0
+#  Date         : 14/03/2020
+#  Version      : 1.0.1
 #
 ##############################################################################################################
 
@@ -15,8 +15,8 @@ Connect-AzAccount
 $context = Get-AzSubscription -SubscriptionId ""
 Select-AzSubscription $context
 
-## Select existing disks by entering the prefix used for the disk names
-$ExistingDisks = Get-AzDisk -Name ""*
+## Select existing disks by entering the prefix used for the disk names before the asterisk e.g. VMPrefix*
+$ExistingDisks = Get-AzDisk -Name *
 
 ## Create a snapshot of each of the disks selected
 Foreach ($Disk in $ExistingDisks)
@@ -36,8 +36,8 @@ Foreach ($Disk in $ExistingDisks)
         -ResourceGroupName $resourceGroupName
     }
 
-## Select newly created snapshots by entering the prefix used for the snapshots
-$ExistingSnapshots = Get-AzSnapshot -SnapshotName ""*
+## Select newly created snapshots by entering the prefix used for the snapshots before the asterisk e.g. VMPrefix*
+$ExistingSnapshots = Get-AzSnapshot -SnapshotName *
 
 ## Create a managed disk from each snapshot
 foreach ($snapshot in $ExistingSnapshots)
@@ -68,8 +68,8 @@ $virtualMachineSize = ""
 ## Initialize virtual machine configuration
 $VirtualMachine = New-AzVMConfig -VMName $virtualMachineName -VMSize $virtualMachineSize
 
-## Select the newly created Datadisks
-$NewDataDisks = Get-AzDisk -Name ""*
+## Select the newly created Datadisks by entering the prefix used for the disk names before the asterisk e.g. VMPrefix*
+$NewDataDisks = Get-AzDisk -Name *
 
 ## Set the LUN to start from 0
 $LUN = 0
@@ -81,8 +81,8 @@ foreach ($DataDisk in $NewDataDisks)
         $LUN++
     }
 
-## Select newly created snapshots by entering the prefix used for the snapshots
-$OSDisk = Get-AzDisk -Name ""* 
+## Select newly created snapshots by entering the prefix used for the snapshots before the asterisk e.g. VMPrefix*
+$OSDisk = Get-AzDisk -Name * 
 
 #Use the Managed Disk Resource Id to attach it to the virtual machine. Use OS type based on the OS present in the disk - Windows / Linux
 $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -ManagedDiskId $OSDisk.Id -CreateOption Attach -Windows
