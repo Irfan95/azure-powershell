@@ -3,8 +3,8 @@
 #  Script       : Clone Existing Azure VM
 #  Description  : Clone an existing Azure VM
 #  Author       : Irfan Hassan
-#  Date         : 14/03/2020
-#  Version      : 1.1.1
+#  Date         : 15/03/2020
+#  Version      : 1.1.2
 #
 ##############################################################################################################
 
@@ -29,14 +29,20 @@ $virtualNetworkRGName = ""
 ## name of the newly created vm
 $virtualMachineName = $vmPrefix + "-vm"
 
-## ## Provide the size of the virtual machine e.g. "Standard_D2s_v3"
+## Provide the size of the virtual machine e.g. "Standard_D2s_v3"
 $virtualMachineSize = ""
+
+## Existing NSG Name
+$nsgName = $vmPrefix
+
+## Subscription ID for Azure
+$SubscriptionID = ""
 
 ## Connect to Azure Account
 Connect-AzAccount
 
 ## Select a subscription
-$context = Get-AzSubscription -SubscriptionId ""
+$context = Get-AzSubscription -SubscriptionId $SubscriptionID
 Select-AzSubscription $context
 
 ## Select existing disks
@@ -121,19 +127,30 @@ foreach ($DataDisk in $NewDataDisks)
 $vmOSDiskName = $vmPrefix + "-OS"
 $osDisk = Get-AzDisk -Name $vmOSDiskName* 
 
-#Use the Managed Disk Resource Id to attach it to the virtual machine. Use OS type based on the OS present in the disk - Windows / Linux
+## Use the Managed Disk Resource Id to attach it to the virtual machine. Use OS type based on the OS present in the disk - Windows / Linux
 $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -ManagedDiskId $osDisk.Id -CreateOption Attach -Windows
 
-#Create a public IP 
-$publicIp = New-AzPublicIpAddress -Name ($VirtualMachineName.ToLower()+'_ip') -ResourceGroupName $newResourceGroupName -Location $Location -AllocationMethod Dynamic
+## Create a public IP 
+$publicIp = New-AzPublicIpAddress -Name ($VirtualMachineName.ToLower()+'_ip') -ResourceGroupName $newResourceGroupName -Location $Location -AllocationMethod Static
 
-#Get VNET Information
+## Select the NSG of the existing vm
+$nsg = Get-AzNetworkSecurityGroup -Name $nsgName* -ResourceGroupName $parentResourceGroupName
+
+## Get VNET Information
 $vnet = Get-AzVirtualNetwork -Name $virtualNetworkName -ResourceGroupName $virtualNetworkRGName
 
-# Create NIC for the VM
-$nic = New-AzNetworkInterface -Name ($VirtualMachineName.ToLower()+'_nic') -ResourceGroupName $newResourceGroupName -Location $Location -SubnetId $vnet.Subnets[0].Id -PublicIpAddressId $publicIp.Id
+## Create NIC for the VM
+$nic = New-AzNetworkInterface -Name ($VirtualMachineName.ToLower()+'_nic') -ResourceGroupName $newResourceGroupName -Location $Location -SubnetId $vnet.Subnets[0].Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id
 
 $VirtualMachine = Add-AzVMNetworkInterface -VM $VirtualMachine -Id $nic.Id
 
-#Create the virtual machine with Managed Disk
+## Create the virtual machine with Managed Disk
 New-AzVM -VM $VirtualMachine -ResourceGroupName $newResourceGroupName -Location $Location
+
+## Store the Public IP address of the VM
+$publicIPConfig = Get-AzPublicIpAddress -ResourceGroupName $newResourceGroupName -Name $vmPrefix* 
+$publicIPAddress = $publicIPConfig.IpAddress
+
+## Output connection details of the VM
+Write-Output "VM Name : $virtualMachineName"
+Write-Output "Public IP Address : $publicIPAddress"

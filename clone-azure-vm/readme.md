@@ -36,3 +36,10 @@ Below you will find changes made along with new issues found in each version.
 - Added prefix variable to name new resources more consistently.
 
 ---
+
+### [v1.1.2] 15/03/2020
+#### Added
+- Added SubscriptionID as a variable at the start
+- Added Output after script completion to display connection details
+
+---
