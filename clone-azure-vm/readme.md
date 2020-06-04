@@ -49,3 +49,15 @@ Below you will find changes made along with new issues found in each version.
 - Added Private IP address output at end of script as per Issue #1
 
 ---
+
+### [v1.1.4] 04/06/2020
+#### Added
+- Added option to duplicate NSG to avoid using existing resources if required.
+- Disabled Diagnostics Account usage on VM
+- Disabled the Background Info extension on VM
+
+#### Resolved
+- [#3] NSG is now created using a duplication of the existing NSG.
+- [#4] New-AzVM wouldnt return a success but now resolved with -DisableBginfoExtension switch and disabled Diagnostic Account usage
+
+---

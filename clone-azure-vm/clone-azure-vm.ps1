@@ -3,12 +3,12 @@
 #  Script       : Clone Existing Azure VM
 #  Description  : Clone an existing Azure VM
 #  Author       : Irfan Hassan
-#  Date         : 06/04/2020
-#  Version      : 1.1.3
+#  Date         : 04/06/2020
+#  Version      : 1.1.4
 #
 ##############################################################################################################
 
-## Prefix of the Existing VM
+## Prefix of the Existing VM (For Windows VMs keep this value at 13 or less characters)
 $parentvmPrefix = ""
 
 ## Uncomment the below if you wish to use a different location to the existing VM
@@ -33,7 +33,10 @@ $virtualMachineName = $vmPrefix + "-vm"
 $virtualMachineSize = ""
 
 ## Existing NSG Name
-$nsgName = $vmPrefix
+$parentnsgName = $parentvmPrefix + "-nsg"
+
+## Uncomment the below and put the Name of the new NSG if you will not be using the existing one
+#$nsgName = $vmPrefix + "-nsg"
 
 ## Subscription ID for Azure
 $SubscriptionID = ""
@@ -133,8 +136,41 @@ $VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -ManagedDiskId $osDisk.Id -
 ## Create a public IP 
 $publicIp = New-AzPublicIpAddress -Name ($VirtualMachineName.ToLower()+'_ip') -ResourceGroupName $newResourceGroupName -Location $Location -AllocationMethod Static
 
-## Select the NSG of the existing vm
-$nsg = Get-AzNetworkSecurityGroup -Name $nsgName* -ResourceGroupName $parentResourceGroupName
+## Get Existing NSG Information
+$nsg = Get-AzNetworkSecurityGroup -Name $parentnsgName -ResourceGroupName $parentResourceGroupName
+
+if ($nsgName)
+    {
+        ## Grab the rules of the existing NSG
+        $nsgRules = Get-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg
+
+        ## Create the new NSG
+        $newNsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName -Location $location
+
+        ## Copy each rule from existing NSG to new NSG
+        foreach ($nsgRule in $nsgRules)
+            {
+                Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $newNsg `
+                    -Name $nsgRule.Name `
+                    -Protocol $nsgRule.Protocol `
+                    -SourcePortRange $nsgRule.SourcePortRange `
+                    -DestinationPortRange $nsgRule.DestinationPortRange `
+                    -SourceAddressPrefix $nsgRule.SourceAddressPrefix `
+                    -DestinationAddressPrefix $nsgRule.DestinationAddressPrefix `
+                    -Priority $nsgRule.Priority `
+                    -Direction $nsgRule.Direction `
+                    -Access $nsgRule.Access 
+            }
+        
+        ## Set the Rules of the New NSG
+        Set-AzNetworkSecurityGroup -NetworkSecurityGroup $newNsg
+        
+        ## Clear existing $nsg
+        Clear-Variable nsg
+
+        ## Set $nsg to new NSG
+        $nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName
+    }
 
 ## Get VNET Information
 $vnet = Get-AzVirtualNetwork -Name $virtualNetworkName -ResourceGroupName $virtualNetworkRGName
@@ -144,8 +180,11 @@ $nic = New-AzNetworkInterface -Name ($VirtualMachineName.ToLower()+'_nic') -Reso
 
 $VirtualMachine = Add-AzVMNetworkInterface -VM $VirtualMachine -Id $nic.Id
 
+## Set Azure Boot Diagnostics Off
+$VirtualMachine = Set-AzVMBootDiagnostic -VM $VirtualMachine -Disable
+
 ## Create the virtual machine with Managed Disk
-New-AzVM -VM $VirtualMachine -ResourceGroupName $newResourceGroupName -Location $Location
+New-AzVM -VM $VirtualMachine -ResourceGroupName $newResourceGroupName -Location $Location -DisableBginfoExtension
 
 ## Store the Public IP address of the VM
 $publicIPConfig = Get-AzPublicIpAddress -ResourceGroupName $newResourceGroupName -Name $vmPrefix* 
@@ -153,6 +192,6 @@ $publicIPAddress = $publicIPConfig.IpAddress
 $privateIPAddress = $nic.IpConfigurations.privateIPAddress
 
 ## Output connection details of the VM
-Write-Output "VM Name : $virtualMachineName"
-Write-Output "Public IP Address : $publicIPAddress"
-Write-Output "Private IP Address : $privateIPAddress"
+Write-Output "VM Name            :  $virtualMachineName"
+Write-Output "Public IP Address  :  $publicIPAddress"
+Write-Output "Private IP Address :  $privateIPAddress"
