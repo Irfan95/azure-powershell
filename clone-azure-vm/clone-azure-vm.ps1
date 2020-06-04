@@ -3,8 +3,8 @@
 #  Script       : Clone Existing Azure VM
 #  Description  : Clone an existing Azure VM
 #  Author       : Irfan Hassan
-#  Date         : 15/03/2020
-#  Version      : 1.1.2
+#  Date         : 06/04/2020
+#  Version      : 1.1.3
 #
 ##############################################################################################################
 
@@ -150,7 +150,9 @@ New-AzVM -VM $VirtualMachine -ResourceGroupName $newResourceGroupName -Location 
 ## Store the Public IP address of the VM
 $publicIPConfig = Get-AzPublicIpAddress -ResourceGroupName $newResourceGroupName -Name $vmPrefix* 
 $publicIPAddress = $publicIPConfig.IpAddress
+$privateIPAddress = $nic.IpConfigurations.privateIPAddress
 
 ## Output connection details of the VM
 Write-Output "VM Name : $virtualMachineName"
 Write-Output "Public IP Address : $publicIPAddress"
+Write-Output "Private IP Address : $privateIPAddress"

@@ -43,3 +43,9 @@ Below you will find changes made along with new issues found in each version.
 - Added Output after script completion to display connection details
 
 ---
+
+### [v1.1.3] 15/03/2020
+#### Added
+- Added Private IP address output at end of script as per Issue #1
+
+---
