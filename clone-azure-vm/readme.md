@@ -10,20 +10,28 @@ This script will obtain the values below from an existing VM and create a new VM
 
 To use this script you will need to fill out the following variables on lines (ln:12) (ln:15) (ln:18) (ln:21)
 This will create the following resources using the details above and naming convention below
-Virtual Machine         : Prefix-vm
-Resource Group          : Prefix-rg
-OS Disk                 : Prefix-OSDisk1
-Data Disk               : Prefix-DataDisk# < # is an incremental value for each disk attached to existing vm
-Network Security Group  : Prefix-nsg
-Public IP Address       : VMName-pip
-NIC                     : VMName-nic
+- Virtual Machine         : Prefix-vm
+- Resource Group          : Prefix-rg
+- OS Disk                 : Prefix-OSDisk1
+- Data Disk               : Prefix-DataDisk# < # is an incremental value for each disk attached to existing vm
+- Network Security Group  : Prefix-nsg
+- Public IP Address       : VMName-pip
+- NIC                     : VMName-nic
+
+---
+
+## Planned Changes
+- Add Logging into a log file (contain everything created and any errors logged with Time/Date Stamp)
+- Add a Confirm page before creating anything which will contain all items and a confirmation page before creating
+- Fix Public IP address warning
+- Make 4 vars parameters
+- Add switch to make old NSG as an option
+- Add switch to make new Virtual Network as an option
 
 ---
 
 ## Changelog
 Below you will find changes made along with new issues found in each version.
-
----
 
 ### [v.1.0.0] 13/03/2020
 #### Added
