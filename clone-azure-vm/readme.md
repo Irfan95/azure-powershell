@@ -27,6 +27,7 @@ This will create the following resources using the details above and naming conv
 - Make 4 vars parameters
 - Add switch to make old NSG as an option
 - Add switch to make new Virtual Network as an option
+- Clear the Snapshots created in existing RG after VM is created.
 
 ---
 
