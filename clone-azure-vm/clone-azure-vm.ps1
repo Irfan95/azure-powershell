@@ -3,40 +3,19 @@
 #  Script       : Clone Existing Azure VM
 #  Description  : Clone an existing Azure VM
 #  Author       : Irfan Hassan
-#  Date         : 04/06/2020
-#  Version      : 1.1.4
+#  Date         : 14/06/2020
+#  Version      : 2.0.0
 #
 ##############################################################################################################
 
-## Prefix of the Existing VM (For Windows VMs keep this value at 13 or less characters)
-$parentvmPrefix = ""
+## Name of the VM you want to clone
+$existingVMName = ""
 
-## Uncomment the below if you wish to use a different location to the existing VM
-#$location = ""
+## Resource group that contains the VM you want to clone
+$existingRg = ""
 
-## Prefix of the New VM
+## Prefix of the New VM resources (Keep this value 13 characters or less)
 $vmPrefix = ""
-
-## Resource group name of new VM
-$newResourceGroupName = $vmPrefix + "-RG"
-
-## Enter the name of an existing virtual network where virtual machine will be created
-$virtualNetworkName = ""
-
-## Enter the name of the existing virtual networks resource group name
-$virtualNetworkRGName = ""
-
-## name of the newly created vm
-$virtualMachineName = $vmPrefix + "-vm"
-
-## Provide the size of the virtual machine e.g. "Standard_D2s_v3"
-$virtualMachineSize = ""
-
-## Existing NSG Name
-$parentnsgName = $parentvmPrefix + "-nsg"
-
-## Uncomment the below and put the Name of the new NSG if you will not be using the existing one
-#$nsgName = $vmPrefix + "-nsg"
 
 ## Subscription ID for Azure
 $SubscriptionID = ""
@@ -48,136 +27,172 @@ Connect-AzAccount
 $context = Get-AzSubscription -SubscriptionId $SubscriptionID
 Select-AzSubscription $context
 
-## Select existing disks
-$existingDisks = Get-AzDisk -Name $parentVMPrefix*
+## Set Virtual Machine Name
+$virtualMachineName = $vmPrefix + "-vm"
 
-## Create a snapshot of each of the disks selected
-Foreach ($disk in $existingDisks)
-    {
-        $parentResourceGroupName = $disk.ResourceGroupName
-        $snapshotName = $disk.name + "-Snapshot"
-        if (!$location)
-            {
-                $location = $disk.Location
-            }
-        $snapshot = New-AzSnapshotConfig `
-        -SourceUri $disk.Id `
-        -Location $location `
-        -CreateOption copy
+## Set new NSG Name
+$nsgName = $vmPrefix + "-nsg"
 
-        New-AzSnapshot `
-        -Snapshot $snapshot `
-        -SnapshotName $snapshotName `
-        -ResourceGroupName $parentresourceGroupName
-    }
+## Gets details of existing VM
+$existingVm = Get-AzVM -Name $existingVMName -ResourceGroupName $existingRG
 
-## Create the new Resource Group if it doesnt exist
+## Gets location of existing VM
+$location = $existingVm.Location
+
+## Set new Resource Group name
+$newResourceGroupName = $vmPrefix + "-rg"
+
+## Create a new Resource Group if it doesnt exist
 Get-AzResourceGroup -Name $newResourceGroupName -ErrorAction SilentlyContinue -ErrorVariable newRGError
 If ($newRGError)
     {
         New-AzResourceGroup -Name $newResourceGroupName -Location $location
     }
 
-## Select newly created OS snapshot
-$osSnapshot = Get-AzSnapshot -SnapshotName $parentVMPrefix*OS*
+## Gets VM size of existing VM
+$vmSize = $existingVm.HardwareProfile | Select-Object VmSize -ExpandProperty VmSize
 
-## Create a managed disk from the OS snapshot
+## Get Nic details from existing VM
+$existingNic = $existingVm.NetworkProfile | Select-Object NetworkInterfaces -ExpandProperty NetworkInterfaces
 
-$osSnapshotName = $osSnapshot.Name
+## Select the existing Nic via ID
+$RefNic = Get-AzNetworkInterface -ResourceId $existingNic.Id
+
+## Select the Subnet the existing vm is attached to (this is to get the id when attaching new VM) $subnet.Id
+$subnet = $RefNic.IpConfigurations | Select-Object subnet -ExpandProperty subnet
+
+## Gets the details of the OSdisk attached to the existing VM (Use .id)
+$existingOsDisk = $existingVm.StorageProfile.OsDisk.ManagedDisk
+
+## Set Snapshot name for existing OSdisk
+$ossnapshotName = $existingVm.StorageProfile.OsDisk.Name + "-Snapshot"
+
+## Creates Snapshot config
+$osSnapshot = New-AzSnapshotConfig `
+-SourceUri $existingOsDisk.Id `
+-Location $location `
+-CreateOption copy
+
+## Creates Snapshot of OS disk
+New-AzSnapshot `
+-Snapshot $osSnapshot `
+-SnapshotName $ossnapshotName `
+-ResourceGroupName $existingRg
+
+## Get OS Disk snapshot details
+$osSnapshot = Get-AzSnapshot -SnapshotName $ossnapshotName -ResourceGroupName $existingRg
+
+## Create new Managed OS Disk via existing snapshot
 $osDiskName = $vmPrefix + "-OSDisk1"
 $diskSize = $osSnapshot.DiskSizeGB
-$osStorageType = "Standard_LRS"
+$osStorageType = $osSnapshot.Sku | Select-Object Name -ExpandProperty Name
 $snapshot = Get-AzSnapshot -ResourceGroupName $resourceGroupName -SnapshotName $osSnapshotName
 $osDiskConfig = New-AzDiskConfig -Location $location -DiskSizeGB $diskSize -SkuName $osStorageType -CreateOption copy -SourceResourceId $snapshot.Id
-$osDisk = New-AzDisk -Disk $osDiskConfig -ResourceGroupName $newResourceGroupName -Diskname $osDiskName
+New-AzDisk -Disk $osDiskConfig -ResourceGroupName $newResourceGroupName -Diskname $osDiskName
+$newosDisk = Get-AzDisk -DiskName $osDiskName -ResourceGroupName $newResourceGroupName
 
-## Select newly created Data snapshots
-$dataSnapshots = Get-AzSnapshot -SnapshotName $parentVMPrefix*data*
+## Gets the details of the Datadisks attached to the existing VM
+$existingdataDisks = $existingVm.StorageProfile.DataDisks
 
-## Set the DataDisk No. to start from 0
-$DatadiskNo = 1
+## Create Snapshot of each Data Disk
+Foreach ($disk in $existingdataDisks)
+    {
+        $diskName = $disk.Name
+        $snapshotName = $diskName + "-Snapshot"
+        $diskId = $disk.ManagedDisk.Id
+        $snapshot = New-AzSnapshotConfig `
+        -SourceUri $diskId `
+        -Location $location `
+        -CreateOption copy
+
+        New-AzSnapshot `
+        -Snapshot $snapshot `
+        -SnapshotName $snapshotName `
+        -ResourceGroupName $existingRg
+
+        $dataSnapshot = Get-AzSnapshot -SnapshotName $snapshotName -ResourceGroupName $existingRg
+        $datasnapshotSku = $dataSnapshot.Sku | Select-Object Name -ExpandProperty Name
+
+        $diskName = $vmPrefix + "-DataDisk" + "-" + ($disk.LUN + "1")
+
+        $dataDisks += @(
+            [pscustomobject]@{DataDiskName=$diskName;DataDiskSnapshotName=$snapshotName;LUN=$disk.Lun;ID=$dataSnapshot.Id;DiskSizeGB=$dataSnapshot.DiskSizeGB;Sku=$datasnapshotSku;}
+        )
+    }
 
 ## Create a managed disk from each snapshot
-foreach ($snapshot in $dataSnapshots)
+foreach ($dataDisk in $dataDisks)
     {
-        $snapshotName = $snapshot.Name
-        $diskName = $vmPrefix + "-DataDisk" + $DatadiskNo
-        $diskSize = $snapshot.DiskSizeGB
-        $storageType = "Standard_LRS"
-        $snapshot = Get-AzSnapshot -ResourceGroupName $parentResourceGroupName -SnapshotName $snapshotName
-        $diskConfig = New-AzDiskConfig -Location $location -DiskSizeGB $diskSize -SkuName $storageType -CreateOption copy -SourceResourceId $snapshot.Id
+        $snapshotName = $dataDisk.DataDiskSnapshotName
+        $diskName = $datadisk.DataDiskName
+        $diskSize = $dataDisk.DiskSizeGB
+        $storageType = $dataDisk.Sku
+        $diskConfig = New-AzDiskConfig -Location $location -DiskSizeGB $diskSize -SkuName $storageType -CreateOption copy -SourceResourceId $dataDisk.ID
         $disk = New-AzDisk -Disk $diskConfig -ResourceGroupName $newResourceGroupName -Diskname $diskName
-        $DatadiskNo++
+        $newdisk = Get-AzDisk -DiskName $diskName -ResourceGroupName $newResourceGroupName
+        $newdataDisks += @(
+            [pscustomobject]@{DataDiskName=$diskName;LUN=$dataDisk.Lun;ID=$newdisk.Id}
+        )
     }
 
 ## Initialize virtual machine configuration
-$VirtualMachine = New-AzVMConfig -VMName $virtualMachineName -VMSize $virtualMachineSize
+$VirtualMachine = New-AzVMConfig -VMName $virtualMachineName -VMSize $vmSize
 
-## Select the newly created Datadisks
-$vmDataDiskName = $vmPrefix + "-DataDisk"
-$NewDataDisks = Get-AzDisk -Name $vmDataDiskName*
+## Add OS Disk to new VM
+$VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -ManagedDiskId $newosDisk.Id -CreateOption Attach -Windows 
 
-## Set the LUN to start from 0
-$LUN = 0
-
-## Add each disk with an incrementing LUN variable
-foreach ($DataDisk in $NewDataDisks)
+## Add each Data Disk to new VM
+foreach ($newdataDisk in $newdataDisks)
     {
-        $VirtualMachine = Add-AzVMDataDisk -VM $VirtualMachine -Name $datadisk.Name -ManagedDiskId $DataDisk.Id -Lun "$LUN" -CreateOption "Attach"
-        $LUN++
+        $VirtualMachine = Add-AzVMDataDisk -VM $VirtualMachine -Name $newdataDisk.DataDiskName -ManagedDiskId $newdataDisk.Id -Lun $newdataDisk.LUN -CreateOption "Attach"
     }
 
-$vmOSDiskName = $vmPrefix + "-OS"
-$osDisk = Get-AzDisk -Name $vmOSDiskName* 
+## Create a new Public IP 
+$publicIp = New-AzPublicIpAddress -Name ($virtualMachineName.ToLower()+'-pip') -ResourceGroupName $newResourceGroupName -Location $Location -AllocationMethod Static
 
-## Use the Managed Disk Resource Id to attach it to the virtual machine. Use OS type based on the OS present in the disk - Windows / Linux
-$VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -ManagedDiskId $osDisk.Id -CreateOption Attach -Windows
+## Obtains the Id of the NSG attached to existing VM
+$nsgId = $RefNic.NetworkSecurityGroup.Id
 
-## Create a public IP 
-$publicIp = New-AzPublicIpAddress -Name ($VirtualMachineName.ToLower()+'_ip') -ResourceGroupName $newResourceGroupName -Location $Location -AllocationMethod Static
+## Obtains the NSG Name from the ID
+$existingnsgName = $nsgId.Split("/")[-1]
+
+$existingnsgRg = $nsgId.Split("/")[-5]
 
 ## Get Existing NSG Information
-$nsg = Get-AzNetworkSecurityGroup -Name $parentnsgName -ResourceGroupName $parentResourceGroupName
+$nsg = Get-AzNetworkSecurityGroup -Name $existingnsgName -ResourceGroupName $existingnsgRg
 
-if ($nsgName)
+## Grab the rules of the existing NSG
+$nsgRules = Get-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg
+$newNsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName -Location $location
+
+## Copy each rule from existing NSG to new NSG
+foreach ($nsgRule in $nsgRules)
     {
-        ## Grab the rules of the existing NSG
-        $nsgRules = Get-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg
-
-        ## Create the new NSG
-        $newNsg = New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName -Location $location
-
-        ## Copy each rule from existing NSG to new NSG
-        foreach ($nsgRule in $nsgRules)
-            {
-                Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $newNsg `
-                    -Name $nsgRule.Name `
-                    -Protocol $nsgRule.Protocol `
-                    -SourcePortRange $nsgRule.SourcePortRange `
-                    -DestinationPortRange $nsgRule.DestinationPortRange `
-                    -SourceAddressPrefix $nsgRule.SourceAddressPrefix `
-                    -DestinationAddressPrefix $nsgRule.DestinationAddressPrefix `
-                    -Priority $nsgRule.Priority `
-                    -Direction $nsgRule.Direction `
-                    -Access $nsgRule.Access 
-            }
-        
-        ## Set the Rules of the New NSG
-        Set-AzNetworkSecurityGroup -NetworkSecurityGroup $newNsg
-        
-        ## Clear existing $nsg
-        Clear-Variable nsg
-
-        ## Set $nsg to new NSG
-        $nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName
+        Add-AzNetworkSecurityRuleConfig -NetworkSecurityGroup $newNsg `
+        -Name $nsgRule.Name `
+        -Protocol $nsgRule.Protocol `
+        -SourcePortRange $nsgRule.SourcePortRange `
+        -DestinationPortRange $nsgRule.DestinationPortRange `
+        -SourceAddressPrefix $nsgRule.SourceAddressPrefix `
+        -DestinationAddressPrefix $nsgRule.DestinationAddressPrefix `
+        -Priority $nsgRule.Priority `
+        -Direction $nsgRule.Direction `
+        -Access $nsgRule.Access 
     }
+        
+## Set the Rules of the New NSG
+Set-AzNetworkSecurityGroup -NetworkSecurityGroup $newNsg
+        
+## Clear existing $nsg
+Clear-Variable nsg
 
-## Get VNET Information
-$vnet = Get-AzVirtualNetwork -Name $virtualNetworkName -ResourceGroupName $virtualNetworkRGName
+## Set $nsg to new NSG
+$nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $newResourceGroupName
 
 ## Create NIC for the VM
-$nic = New-AzNetworkInterface -Name ($VirtualMachineName.ToLower()+'_nic') -ResourceGroupName $newResourceGroupName -Location $Location -SubnetId $vnet.Subnets[0].Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id
+$nic = New-AzNetworkInterface -Name ($VirtualMachineName.ToLower()+'-nic') -ResourceGroupName $newResourceGroupName -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id
 
+## Attach NIC to the new VM
 $VirtualMachine = Add-AzVMNetworkInterface -VM $VirtualMachine -Id $nic.Id
 
 ## Set Azure Boot Diagnostics Off
@@ -192,6 +207,6 @@ $publicIPAddress = $publicIPConfig.IpAddress
 $privateIPAddress = $nic.IpConfigurations.privateIPAddress
 
 ## Output connection details of the VM
-Write-Output "VM Name            :  $virtualMachineName"
-Write-Output "Public IP Address  :  $publicIPAddress"
-Write-Output "Private IP Address :  $privateIPAddress"
+Write-Output "Virtual Machine Name :  $virtualMachineName"
+Write-Output "Public IP Address    :  $publicIPAddress"
+Write-Output "Private IP Address   :  $privateIPAddress"
