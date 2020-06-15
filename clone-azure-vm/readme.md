@@ -28,6 +28,7 @@ This will create the following resources using the details above and naming conv
 - Add switch to make old NSG as an option
 - Add switch to make new Virtual Network as an option
 - Clear the Snapshots created in existing RG after VM is created.
+- Make all sections Functions to be able to do individual functions
 
 ---
 
