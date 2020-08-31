@@ -13,17 +13,17 @@ The method of defining the NSGs to be updated is via a variable followed by a wi
 ---
 
 ## Usage
-- To run as a one off without specifying any parameters beforehand (This will prompt you for the authentication details and the Rule name you want to update)
-.\auto-update-nsg.ps1 
+To run as a one off without specifying any parameters beforehand (This will prompt you for the authentication details and the Rule name you want to update)
+- .\auto-update-nsg.ps1 
 
-- To run as a one off without having to make any inputs update the auto-update-nsg.ps1 script with static entries of your authentication details and rule name (ln.13),(ln.14),(ln.15),(ln.16)
-.\auto-update-nsg.ps1
+To run as a one off without having to make any inputs update the auto-update-nsg.ps1 script with static entries of your authentication details and rule name (ln.13),(ln.14),(ln.15),(ln.16)
+- .\auto-update-nsg.ps1
 
-- To run as a one off and specify the authentication details and rule name
-.\auto-update-nsg.ps1 -key "Enter Key Here" -clientId "Enter ClientID Here" -tenantId "Enter TenantID Here" -existingRuleName "Enter Existing Rule Name Here"
+To run as a one off and specify the authentication details and rule name
+- .\auto-update-nsg.ps1 -key "Enter Key Here" -clientId "Enter ClientID Here" -tenantId "Enter TenantID Here" -existingRuleName "Enter Existing Rule Name Here"
 
-- To install the script as a scheduled task for automatic run at 7am every day update the auto-update-nsg.ps1 script with static entries of your authentication details and rule name (ln.13),(ln.14),(ln.15),(ln.16) and specify the -install flag
-.\auto-update-nsg.ps1 -install
+To install the script as a scheduled task for automatic run at 7am every day update the auto-update-nsg.ps1 script with static entries of your authentication details and rule name (ln.13),(ln.14),(ln.15),(ln.16) and specify the -install flag
+- .\auto-update-nsg.ps1 -install
 
 ---
 
